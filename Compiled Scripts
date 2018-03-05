@@ -1,5 +1,4 @@
-#Install MSI On Multiple Instances
-
+##Install MSI On Multiple Instances
 
 #Variables
 $computername = Get-Content C:\list.txt
@@ -20,4 +19,14 @@ foreach ($computer in $computername)
     Remove-Item -Path \\$computer\c$\Temp1 -recurse    
 }
 
+##Copy Server Roles
 
+$sourceServer = "Server1"
+$destServer = "Server2"
+Get-WindowsFeature -ComputerName $sourceServer | Where-Object {$_.Installed -match “True”} | Install-WindowsFeature -ComputerName $destServer -Source C:\sxs 
+
+##Get AD Group Memberships
+Get-ADGroupMember [groupname] | Export-CSV [csv path]
+
+##Remove Windows Feature
+Uninstall-WindowsFeature -name featurename
