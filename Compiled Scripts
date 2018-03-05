@@ -1,3 +1,6 @@
+WARNING!!! Test these scripts in a NON PROD environment before running them in a PROD Environment!!!
+
+
 ##Install MSI On Multiple Instances
 
 #Variables
