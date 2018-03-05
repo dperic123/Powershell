@@ -30,3 +30,78 @@ Get-ADGroupMember [groupname] | Export-CSV [csv path]
 
 ##Remove Windows Feature
 Uninstall-WindowsFeature -name featurename
+
+##Migrate User Homeshares and Change Home Drive
+#Import Modules
+Import-module activedirectory 
+#Only necessary if you're making AD calls
+
+#Set variables
+#Location of OLD HomeDirectory.
+$OldHomePath = "location" 
+
+#Location of NEW HomeDirectory.
+$NewHomePath = "location" 
+
+#$Department = ""
+#Location of script's log file.
+$LogPath = "c:\log.txt"
+
+#Location of the source file used to get SAMaccountName list
+$SourcePath = "C:\users.txt"
+
+#Get list of samaccountanmes
+$users = Get-content $SourcePath
+#You can also query this from AD via Get-ADuser
+
+function Set-Folder-Security($NewHomePath, $user) 
+            {
+                $acl = [System.IO.Directory]::GetAccessControl($NewHomePath)
+                $flags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+                $userid = $user
+                $params = $userid,[System.Security.AccessControl.FileSystemRights]::FullControl,$flags,[System.Security.AccessControl.PropagationFlags]::None,[System.Security.AccessControl.AccessControlType]::Allow
+                $rule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList $params
+                $acl.SetAccessRule($rule)
+                $acl.SetOwner([System.Security.Principal.NTAccount]'BUILTIN\Administrators')
+                [System.IO.Directory]::SetAccessControl("$NewHomePath",$acl)              
+            }
+#Loop through each SAMaccountName in the list
+foreach ($user in $users) {
+    #Check to see if old path and new path exist
+    $OldPathExists = Test-Path "$OldHomePath\$User"
+    $NewPathExists = Test-Path "$NewHomePath\$user"
+    Write-Host "Working on $user ..."
+    #Nothing to copy. Just set HomePath.
+    If (($OldPathExists -eq $False) -and ($NewPathExists -eq $true)) {
+        Write-Host "Nothing to copy. Setting HomePath ..."
+        Set-ADUser -identity $User -HomeDirectory "$NewHomePath\$User" -HomeDrive U:
+    }
+    #Nothing to copy, but create NewHomePath and set HomePath.
+    If (($OldPathExists -eq $False) -and ($NewPathExists -eq $false)) {
+        Write-Host "Nothing to copy, but creating a NewHomePath ..."
+        New-Item -Name $User -ItemType Directory -Path $NewHomePath | Out-Null
+        takeown /A /R /D Y /F  $OldHomePath\$User #fix potential ownership issues...argh
+        icacls $OldHomePath\$User /T /C /grant "Administrators:(F)" 
+        Set-Folder-Security "$newhomepath\$user" $user
+         Set-ADUser -identity $User -HomeDirectory "$NewHomePath\$User" -HomeDrive U:  
+    } 
+    #Stuff to copy, but we need to create NewHomePath first. Set HomePath, copy, then rename OldHomePath.
+    If (($OldPathExists -eq $True) -and ($NewPathExists -eq $False)) {
+        Write-Host "Creating NewHomePath and copying data ..."
+        New-Item -Name $User -ItemType Directory -Path $NewHomePath | Out-Null
+        takeown /A /R /D Y /F  $OldHomePath\$User #fix potential ownership issues...argh
+        icacls $OldHomePath\$User /T /C /grant "Administrators:(F)"
+        Set-Folder-Security "$newhomepath\$user" $user 
+        Set-ADUser -identity $User -HomeDirectory "$NewHomePath\$User" -HomeDrive U:
+        robocopy $OldHomePath\$user $NewHomePath\$User /E /SEC /SECFIX /R:2 /W:5
+        rename-item $OldHomePath\$User $OldHomePath\$User.old
+    }
+    #Stuff to copy. Set HomePath, copy, then rename OldHomePath.
+    If (($OldPathExists -eq $True) -and ($NewPathExists -eq $true)) {
+        Write-Host "Setting HomePath and copying data ..."
+        Set-ADUser -identity $User -HomeDirectory "$NewHomePath\$User" -HomeDrive U:
+        robocopy $OldHomePath\$user $NewHomePath\$User /E /SEC /SECFIX /R:2 /W:5
+        rename-item $OldHomePath\$User $OldHomePath\$User.old
+    }
+
+} 
