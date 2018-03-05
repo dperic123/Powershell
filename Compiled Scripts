@@ -1,0 +1,23 @@
+#Install MSI On Multiple Instances
+
+
+#Variables
+$computername = Get-Content C:\list.txt
+$sourcefile = "Location of MSI"
+
+#This section will install the software 
+foreach ($computer in $computername) 
+{
+	$destinationFolder = "\\$computer\C$\Temp1"
+	#This section will copy the $sourcefile to the $destinationfolder. If the Folder does not exist it will create it.
+	if (!(Test-Path -path $destinationFolder))
+	{
+		New-Item $destinationFolder -Type Directory
+	}
+	  Copy-Item -Path $sourcefile -Destination $destinationFolder -Recurse
+	  Invoke-Command -computername $computer -scriptblock {(start-process "c:\windows\system32\msiexec.exe" -Argumentlist "/I", '"Full Path to MSI.msi"', "/qb" -NoNewWindow -Wait -passthru).exitcode}
+    start-sleep 10 
+    Remove-Item -Path \\$computer\c$\Temp1 -recurse    
+}
+
+
